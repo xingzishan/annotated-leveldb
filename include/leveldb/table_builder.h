@@ -23,11 +23,18 @@ class BlockBuilder;
 class BlockHandle;
 class WritableFile;
 
+/*******************************
+ * sstable创建接口，将immutable中的数据写入到level-0层的sstable中，
+ * 同时设置data block对应的meta block信息，非多线程安全
+ *******************************/
 class TableBuilder {
  public:
   // Create a builder that will store the contents of the table it is
   // building in *file.  Does not close the file.  It is up to the
   // caller to close the file after calling Finish().
+  /*********************************
+   * TableBuilder对象关联一个file，用于写入immutable数据
+   ********************************/
   TableBuilder(const Options& options, WritableFile* file);
 
   // REQUIRES: Either Finish() or Abandon() has been called.
@@ -44,6 +51,10 @@ class TableBuilder {
   // Add key,value to the table being constructed.
   // REQUIRES: key is after any previously added key according to comparator.
   // REQUIRES: Finish(), Abandon() have not been called
+  /******************************************
+   * sstable为sorted string table, 后添加的key比之前的keys都要大
+   * 否则添加失败
+   *****************************************/
   void Add(const Slice& key, const Slice& value);
 
   // Advanced operation: flush any buffered key/value pairs to file.

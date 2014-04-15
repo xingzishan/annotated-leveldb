@@ -14,6 +14,7 @@ namespace leveldb {
 Comparator::~Comparator() { }
 
 namespace {
+// 内建字典序比较器的实现类
 class BytewiseComparatorImpl : public Comparator {
  public:
   BytewiseComparatorImpl() { }
@@ -26,6 +27,11 @@ class BytewiseComparatorImpl : public Comparator {
     return a.compare(b);
   }
 
+  /***************************
+   * 找出[start,limit]之间的最短seprator,比如
+   * start="abcd" limit="abz" result="abd"
+   * start="ab" limit="sf"    result="ac"
+   **************************/
   virtual void FindShortestSeparator(
       std::string* start,
       const Slice& limit) const {
@@ -50,6 +56,11 @@ class BytewiseComparatorImpl : public Comparator {
     }
   }
 
+  /************************************
+   * key的最短后继者，依次判断key的每个字符，第一个不为0xff的char+1, 比如
+   * key="abcd" result="b"
+   * key="0xffdz" result="0xffe"
+   ***********************************/
   virtual void FindShortSuccessor(std::string* key) const {
     // Find first character that can be incremented
     size_t n = key->size();
@@ -73,6 +84,7 @@ static void InitModule() {
   bytewise = new BytewiseComparatorImpl;
 }
 
+//字典序比较器初始化一次即可
 const Comparator* BytewiseComparator() {
   port::InitOnce(&once, InitModule);
   return bytewise;

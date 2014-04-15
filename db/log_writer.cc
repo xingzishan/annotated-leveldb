@@ -31,6 +31,7 @@ Status Writer::AddRecord(const Slice& slice) {
   // Fragment the record if necessary and emit it.  Note that if slice
   // is empty, we still want to iterate once to emit a single
   // zero-length record
+  // 可能需要对record进行分片，如果sluice为空，仍然需要记录到日志
   Status s;
   bool begin = true;
   do {
@@ -76,7 +77,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
   assert(n <= 0xffff);  // Must fit in two bytes
   assert(block_offset_ + kHeaderSize + n <= kBlockSize);
 
-  // Format the header
+  // Format the header  crc + length + type
   char buf[kHeaderSize];
   buf[4] = static_cast<char>(n & 0xff);
   buf[5] = static_cast<char>(n >> 8);
@@ -91,6 +92,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
   Status s = dest_->Append(Slice(buf, kHeaderSize));
   if (s.ok()) {
     s = dest_->Append(Slice(ptr, n));
+    // flush到磁盘
     if (s.ok()) {
       s = dest_->Flush();
     }

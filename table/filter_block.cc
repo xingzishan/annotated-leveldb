@@ -12,6 +12,7 @@ namespace leveldb {
 // See doc/table_format.txt for an explanation of the filter block format.
 
 // Generate new filter every 2KB of data
+// !!! 每2KB的数据就产生一个filter
 static const size_t kFilterBaseLg = 11;
 static const size_t kFilterBase = 1 << kFilterBaseLg;
 
@@ -40,10 +41,12 @@ Slice FilterBlockBuilder::Finish() {
 
   // Append array of per-filter offsets
   const uint32_t array_offset = result_.size();
+  // 每2KB创建一个filter，将各个filter偏移量追加到result
   for (size_t i = 0; i < filter_offsets_.size(); i++) {
     PutFixed32(&result_, filter_offsets_[i]);
   }
 
+  // offset array在result中的position和编码参数(11)追加到result, 4个Bytes + 1个Bytes
   PutFixed32(&result_, array_offset);
   result_.push_back(kFilterBaseLg);  // Save encoding parameter in result
   return Slice(result_);
@@ -58,6 +61,7 @@ void FilterBlockBuilder::GenerateFilter() {
   }
 
   // Make list of keys from flattened key structure
+  // 计算filter之前，所有keys的总长度, keys包含n个key，则start_包含n+1个keys offset
   start_.push_back(keys_.size());  // Simplify length computation
   tmp_keys_.resize(num_keys);
   for (size_t i = 0; i < num_keys; i++) {
@@ -67,7 +71,9 @@ void FilterBlockBuilder::GenerateFilter() {
   }
 
   // Generate filter for current set of keys and append to result_.
+  // 每次计算结果的偏移量追加到filter_offsets
   filter_offsets_.push_back(result_.size());
+  // 通过policy计算num个key的filter值，并追加到result
   policy_->CreateFilter(&tmp_keys_[0], num_keys, &result_);
 
   tmp_keys_.clear();
@@ -93,18 +99,21 @@ FilterBlockReader::FilterBlockReader(const FilterPolicy* policy,
 }
 
 bool FilterBlockReader::KeyMayMatch(uint64_t block_offset, const Slice& key) {
+  // 取出filter数据，通过filter_policy去匹配
   uint64_t index = block_offset >> base_lg_;
   if (index < num_) {
     uint32_t start = DecodeFixed32(offset_ + index*4);
     uint32_t limit = DecodeFixed32(offset_ + index*4 + 4);
     if (start <= limit && limit <= (offset_ - data_)) {
       Slice filter = Slice(data_ + start, limit - start);
+      //匹配key与filter
       return policy_->KeyMayMatch(key, filter);
     } else if (start == limit) {
       // Empty filters do not match any keys
       return false;
     }
   }
+  // error 被认为匹配
   return true;  // Errors are treated as potential matches
 }
 

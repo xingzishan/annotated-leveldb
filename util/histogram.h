@@ -9,6 +9,7 @@
 
 namespace leveldb {
 
+// 直方图,用于统计显示
 class Histogram {
  public:
   Histogram() { }

@@ -12,6 +12,11 @@
 
 namespace leveldb {
 
+/********************************
+ * 类似memcache中的slab机制，分配一块空间(4K)，比block小的空间直接在
+ * block上分配，block空间不足的话重新分配一个block或者直接分配申请空间
+ * 减少内存碎片
+ *******************************/
 class Arena {
  public:
   Arena();
@@ -21,6 +26,9 @@ class Arena {
   char* Allocate(size_t bytes);
 
   // Allocate memory with the normal alignment guarantees provided by malloc
+  /*****************************
+   * 按8B字节对齐分配内存
+   ****************************/
   char* AllocateAligned(size_t bytes);
 
   // Returns an estimate of the total memory usage of data allocated
@@ -35,10 +43,16 @@ class Arena {
   char* AllocateNewBlock(size_t block_bytes);
 
   // Allocation state
+  /***********************
+   * 分配状态，标示当前block可用空间地址以及剩余空间
+   **********************/
   char* alloc_ptr_;
   size_t alloc_bytes_remaining_;
 
   // Array of new[] allocated memory blocks
+  /***********************
+   * 内存按块分配，分配的块放入vector中，blocks存储实际配分的内存空间
+   ***********************/
   std::vector<char*> blocks_;
 
   // Bytes of memory in blocks allocated so far
@@ -49,6 +63,10 @@ class Arena {
   void operator=(const Arena&);
 };
 
+/****************************
+ * 如果当前block空间足够，直接在当前block上分配
+ * 否则重新申请block或者直接分配申请的空间大小
+ ***************************/
 inline char* Arena::Allocate(size_t bytes) {
   // The semantics of what to return are a bit messy if we allow
   // 0-byte allocations, so we disallow them here (we don't need

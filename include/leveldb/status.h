@@ -18,6 +18,10 @@
 
 namespace leveldb {
 
+/****************************
+* 操作结果封装类，只包含一个char*,所有信息放在char*中，
+* char*为NULL，则表示Success，非多线程安全
+******************************/
 class Status {
  public:
   // Create a success status.
@@ -70,6 +74,12 @@ class Status {
   //    state_[0..3] == length of message
   //    state_[4]    == code
   //    state_[5..]  == message
+  /***************************
+   * stat_ 包含所有Status的所有信息，
+   * 前4字节是message长度,不包括前5个字节
+   * 第5个字节是status code，
+   * 后面的为message
+   *************************/
   const char* state_;
 
   enum Code {

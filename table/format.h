@@ -19,6 +19,7 @@ struct ReadOptions;
 
 // BlockHandle is a pointer to the extent of a file that stores a data
 // block or a meta block.
+// BlockHandle为Block的索引信息（在sstable中的位置)
 class BlockHandle {
  public:
   BlockHandle();
@@ -44,6 +45,11 @@ class BlockHandle {
 
 // Footer encapsulates the fixed information stored at the tail
 // end of every table file.
+/********************************
+ * Footer 是sstable的最后组成部分，由metaindex_block_handle,index_block_handle,padding,magic number
+ * 组成，metaindex block与index block的offset和size信息放在footer中，
+ * data block的offset和size信息放在index block信息中
+ *******************************/
 class Footer {
  public:
   Footer() { }
@@ -81,8 +87,10 @@ class Footer {
 static const uint64_t kTableMagicNumber = 0xdb4775248b80fb57ull;
 
 // 1-byte type + 32-bit crc
+// Block的tailer长度 type(1B) + crc(4B)
 static const size_t kBlockTrailerSize = 5;
 
+// BlockContents包含block数据，通常用于初始化block
 struct BlockContents {
   Slice data;           // Actual contents of data
   bool cachable;        // True iff data can be cached
@@ -91,6 +99,7 @@ struct BlockContents {
 
 // Read the block identified by "handle" from "file".  On failure
 // return non-OK.  On success fill *result and return OK.
+// 根据BlockHandle读取block到BlockContents
 extern Status ReadBlock(RandomAccessFile* file,
                         const ReadOptions& options,
                         const BlockHandle& handle,

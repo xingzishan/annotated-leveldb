@@ -16,6 +16,9 @@
 
 namespace leveldb {
 
+/****************************
+* 此Logger类是leveldb启动或者错误日志，并非leveldb的数据写日志
+****************************/
 class PosixLogger : public Logger {
  private:
   FILE* file_;
@@ -30,6 +33,10 @@ class PosixLogger : public Logger {
 
     // We try twice: the first time with a fixed-size stack allocated buffer,
     // and the second time with a much larger dynamically allocated buffer.
+    /********************************
+     * 日志内容先写入到buffer中，第一次日志内容写入到固定大小的stack中（空间较小）
+     * 如果空间不足，再使用堆上分配的buffer存放日志内容
+     *******************************/
     char buffer[500];
     for (int iter = 0; iter < 2; iter++) {
       char* base;

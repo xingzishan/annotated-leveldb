@@ -34,6 +34,7 @@ Reader::~Reader() {
 
 bool Reader::SkipToInitialBlock() {
   size_t offset_in_block = initial_offset_ % kBlockSize;
+  // 定位initial_offset所在block的起始位置
   uint64_t block_start_location = initial_offset_ - offset_in_block;
 
   // Don't search a block if we'd be in the trailer
@@ -46,6 +47,7 @@ bool Reader::SkipToInitialBlock() {
 
   // Skip to start of first block that can contain the initial record
   if (block_start_location > 0) {
+    // 跳到block的起始位置
     Status skip_status = file_->Skip(block_start_location);
     if (!skip_status.ok()) {
       ReportDrop(block_start_location, skip_status);
@@ -178,6 +180,10 @@ void Reader::ReportDrop(size_t bytes, const Status& reason) {
 
 unsigned int Reader::ReadPhysicalRecord(Slice* result) {
   while (true) {
+    /***********************
+     * 一个block中可能会有多个record，当buffer.size()>KHeaderSize时，说明
+     * 还有其它record，不需要读取physical record
+     ***********************/
     if (buffer_.size() < kHeaderSize) {
       if (!eof_) {
         // Last read was a full read, so this is a trailer to skip
@@ -241,6 +247,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
       }
     }
 
+    //buffer指针变了，header指针没变
     buffer_.remove_prefix(kHeaderSize + length);
 
     // Skip physical record that started before initial_offset_
@@ -250,6 +257,7 @@ unsigned int Reader::ReadPhysicalRecord(Slice* result) {
       return kBadRecord;
     }
 
+    // result 只取数据部分(kv), header去除
     *result = Slice(header + kHeaderSize, length);
     return type;
   }

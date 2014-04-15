@@ -28,14 +28,18 @@ class MergingIterator : public Iterator {
     delete[] children_;
   }
 
+  // MergingIterator 通过current_ 操作具体的iter
+  // current 需要指定到某个child iter才为valid
   virtual bool Valid() const {
     return (current_ != NULL);
   }
 
   virtual void SeekToFirst() {
     for (int i = 0; i < n_; i++) {
+      // 所有child iter都回到first entry
       children_[i].SeekToFirst();
     }
+    // 找到最小entry所在的iter即可
     FindSmallest();
     direction_ = kForward;
   }
@@ -64,11 +68,16 @@ class MergingIterator : public Iterator {
     // true for all of the non-current_ children since current_ is
     // the smallest child and key() == current_->key().  Otherwise,
     // we explicitly position the non-current_ children.
+    // 根据key(), 也即cruuent->key(), 所有child key通过seek()重定位
     if (direction_ != kForward) {
       for (int i = 0; i < n_; i++) {
         IteratorWrapper* child = &children_[i];
         if (child != current_) {
           child->Seek(key());
+          /****************************
+           * 如果一个key同时存在多个child iter中，执行MergeIterator->Next时
+           * 会将其作为一个key处理
+           ***************************/
           if (child->Valid() &&
               comparator_->Compare(key(), child->key()) == 0) {
             child->Next();
@@ -78,6 +87,7 @@ class MergingIterator : public Iterator {
       direction_ = kForward;
     }
 
+    // 当前iter->next 和其它iter的当前值再比较
     current_->Next();
     FindSmallest();
   }
@@ -107,6 +117,7 @@ class MergingIterator : public Iterator {
       direction_ = kReverse;
     }
 
+    // 当前iter->Prev() 再从所有iter中找出最大的iter
     current_->Prev();
     FindLargest();
   }

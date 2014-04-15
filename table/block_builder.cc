@@ -45,6 +45,7 @@ BlockBuilder::BlockBuilder(const Options* options)
   restarts_.push_back(0);       // First restart point is at offset 0
 }
 
+// 重置所有成员
 void BlockBuilder::Reset() {
   buffer_.clear();
   restarts_.clear();
@@ -54,12 +55,14 @@ void BlockBuilder::Reset() {
   last_key_.clear();
 }
 
+// 计算整个block的大小，不包括tailer
 size_t BlockBuilder::CurrentSizeEstimate() const {
   return (buffer_.size() +                        // Raw data buffer
           restarts_.size() * sizeof(uint32_t) +   // Restart array
           sizeof(uint32_t));                      // Restart array length
 }
 
+// finish操作追加restart point信息到buffer
 Slice BlockBuilder::Finish() {
   // Append restart array
   for (size_t i = 0; i < restarts_.size(); i++) {
@@ -74,6 +77,7 @@ void BlockBuilder::Add(const Slice& key, const Slice& value) {
   Slice last_key_piece(last_key_);
   assert(!finished_);
   assert(counter_ <= options_->block_restart_interval);
+  // 确保新增加的key比last key大, 否则不符合sstable定义
   assert(buffer_.empty() // No values yet?
          || options_->comparator->Compare(key, last_key_piece) > 0);
   size_t shared = 0;

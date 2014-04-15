@@ -20,6 +20,10 @@ struct ReadOptions;
 //
 // Uses a supplied function to convert an index_iter value into
 // an iterator over the contents of the corresponding block.
+/* 使用block function将index_iter的值(BlockHandle)转化成data_iter
+ * 即根据index_iter得到data block iter, table 存取的是data block中的数据，
+ * 为方便存取，使用index_iter控制data_iter
+ */
 extern Iterator* NewTwoLevelIterator(
     Iterator* index_iter,
     Iterator* (*block_function)(

@@ -31,6 +31,7 @@ class TwoLevelIterator: public Iterator {
   virtual void Next();
   virtual void Prev();
 
+  // 最终读取的是data block中的key value
   virtual bool Valid() const {
     return data_iter_.Valid();
   }
@@ -66,10 +67,13 @@ class TwoLevelIterator: public Iterator {
   void* arg_;
   const ReadOptions options_;
   Status status_;
+  // 指向index block的iter
   IteratorWrapper index_iter_;
+  // 根据index iter获得的data_iter_
   IteratorWrapper data_iter_; // May be NULL
   // If data_iter_ is non-NULL, then "data_block_handle_" holds the
   // "index_value" passed to block_function_ to create the data_iter_.
+  // 保存当前data block的BlockHandle序列化值
   std::string data_block_handle_;
 };
 
@@ -88,7 +92,9 @@ TwoLevelIterator::TwoLevelIterator(
 TwoLevelIterator::~TwoLevelIterator() {
 }
 
+/* Seek相关函数都是先从index block中定位，再在data block中定位 */
 void TwoLevelIterator::Seek(const Slice& target) {
+  // 现在index block中定位target， index block也是按照data block中的last key作为key的
   index_iter_.Seek(target);
   InitDataBlock();
   if (data_iter_.iter() != NULL) data_iter_.Seek(target);
@@ -121,7 +127,8 @@ void TwoLevelIterator::Prev() {
   SkipEmptyDataBlocksBackward();
 }
 
-
+// 判断data_iter是否合法，不合法则跳过该data blcok，
+// 新的data iter要定位到SeekToFirst
 void TwoLevelIterator::SkipEmptyDataBlocksForward() {
   while (data_iter_.iter() == NULL || !data_iter_.Valid()) {
     // Move to next block
@@ -135,6 +142,10 @@ void TwoLevelIterator::SkipEmptyDataBlocksForward() {
   }
 }
 
+/************************
+ * 判断data_iter是否合法，不合法则往后跳过该data blcok，
+ * 新的data iter要定位到SeekToLast
+ ***********************/
 void TwoLevelIterator::SkipEmptyDataBlocksBackward() {
   while (data_iter_.iter() == NULL || !data_iter_.Valid()) {
     // Move to next block
@@ -153,6 +164,7 @@ void TwoLevelIterator::SetDataIterator(Iterator* data_iter) {
   data_iter_.Set(data_iter);
 }
 
+// 根据index_iter的value(BlockHandle)得出data_iter, 具体的转化函数为block_funtion
 void TwoLevelIterator::InitDataBlock() {
   if (!index_iter_.Valid()) {
     SetDataIterator(NULL);
@@ -164,6 +176,7 @@ void TwoLevelIterator::InitDataBlock() {
     } else {
       Iterator* iter = (*block_function_)(arg_, options_, handle);
       data_block_handle_.assign(handle.data(), handle.size());
+      // SetDataIterator 函数会先delete掉原有的iter，再设置现在的iter
       SetDataIterator(iter);
     }
   }

@@ -311,6 +311,7 @@ class VersionSet {
 
   // Per-level key at which the next compaction at that level should start.
   // Either an empty string, or a valid InternalKey.
+  // 每个level下次compact的start_key
   std::string compact_pointer_[config::kNumLevels];
 
   // No copying allowed
@@ -345,6 +346,7 @@ class Compaction {
   bool IsTrivialMove() const;
 
   // Add all inputs to this compaction as delete operations to *edit.
+  // 要被合并的files都是要被删除的
   void AddInputDeletions(VersionEdit* edit);
 
   // Returns true if the information we have available guarantees that
@@ -376,6 +378,7 @@ class Compaction {
 
   // State used to check for number of of overlapping grandparent files
   // (parent == level_ + 1, grandparent == level_ + 2)
+  // grandparents_的值在SetupOtherIterator时设置
   std::vector<FileMetaData*> grandparents_;
   size_t grandparent_index_;  // Index in grandparent_starts_
   bool seen_key_;             // Some output key has been seen

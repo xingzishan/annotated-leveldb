@@ -22,12 +22,23 @@ namespace {
 
 // An entry is a variable length heap-allocated structure.  Entries
 // are kept in a circular doubly linked list ordered by access time.
+/*******************************
+* LRUHandle类似memcache中的item，既是LRUCache中的entry，也是LRU双向队列中的node
+* 在双向队列中按照access time排序
+********************************/
 struct LRUHandle {
   void* value;
   void (*deleter)(const Slice&, void* value);
+  /************************
+   * 用于链表地址法中解决hash冲突时，指向具有相同hash值的下一个元素
+   ************************/
   LRUHandle* next_hash;
+  /************************
+   * 用于lru双向队列中，通过access time表示先后关系
+   ************************/
   LRUHandle* next;
   LRUHandle* prev;
+  // in normal case, charge should be 1
   size_t charge;      // TODO(opt): Only allow uint32_t?
   size_t key_length;
   uint32_t refs;
@@ -59,6 +70,10 @@ class HandleTable {
     return *FindPointer(key, hash);
   }
 
+  /*********************************
+   * 如果LRUHandle已经存在,更新value，否则插入，并判断是否需要扩容
+   * 如果hashtable中存储的LRUHandle大于hashtable长度时，需要扩容
+   ********************************/
   LRUHandle* Insert(LRUHandle* h) {
     LRUHandle** ptr = FindPointer(h->key(), h->hash);
     LRUHandle* old = *ptr;
@@ -72,9 +87,16 @@ class HandleTable {
         Resize();
       }
     }
+    /******************************
+     * 原先的LRUHandle并不删除，而是返回给LRUCache,在LRUCache中删除，
+     * 因为LRUHandle在LRU队列中还有使用
+     *****************************/
     return old;
   }
 
+  /******************************
+   * 并不真正删除，找到LURHandle返回
+   *****************************/
   LRUHandle* Remove(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = FindPointer(key, hash);
     LRUHandle* result = *ptr;
@@ -90,6 +112,7 @@ class HandleTable {
   // a linked list of cache entries that hash into the bucket.
   uint32_t length_;
   uint32_t elems_;
+  // handleTable的哈希表
   LRUHandle** list_;
 
   // Return a pointer to slot that points to a cache entry that
@@ -109,6 +132,10 @@ class HandleTable {
     while (new_length < elems_) {
       new_length *= 2;
     }
+    /***********************************
+     * 类似redis中的dict，新生成一个大小合适的list,将原先list中的元素
+     * 依次迁移到new_list, 最后delete掉原先的list
+     ***********************************/
     LRUHandle** new_list = new LRUHandle*[new_length];
     memset(new_list, 0, sizeof(new_list[0]) * new_length);
     uint32_t count = 0;
@@ -117,6 +144,10 @@ class HandleTable {
       while (h != NULL) {
         LRUHandle* next = h->next_hash;
         uint32_t hash = h->hash;
+        /*****************************
+         * 在新的哈希表中，LRUHandle的hash值不变，所在的链表位置
+         * 可能不变, 变得是hash>length的这部分LRUHandle
+         ****************************/
         LRUHandle** ptr = &new_list[hash & (new_length - 1)];
         h->next_hash = *ptr;
         *ptr = h;
@@ -132,6 +163,9 @@ class HandleTable {
 };
 
 // A single shard of sharded cache.
+/*******************
+ * LRUCache是ShardedCache中的Shard, 并不继承Cache
+ ******************/
 class LRUCache {
  public:
   LRUCache();
@@ -149,6 +183,7 @@ class LRUCache {
   void Erase(const Slice& key, uint32_t hash);
 
  private:
+  // LRU队列中添加和删除LRUHandle
   void LRU_Remove(LRUHandle* e);
   void LRU_Append(LRUHandle* e);
   void Unref(LRUHandle* e);
@@ -162,8 +197,13 @@ class LRUCache {
 
   // Dummy head of LRU list.
   // lru.prev is newest entry, lru.next is oldest entry.
+  /***************************
+   * LRU队列, 非指针，lru.prev就是最新的LRUHanle, lru.next就是最旧的LRUHandle
+   * 最应该被首先替换的LRUHandle
+   ***************************/
   LRUHandle lru_;
 
+  // Cache中的哈希表, 非指针
   HandleTable table_;
 };
 
@@ -175,6 +215,10 @@ LRUCache::LRUCache()
 }
 
 LRUCache::~LRUCache() {
+  /***********************
+   * 由于LRUHandle在LRU队列和哈希表中都有引用，在LRU队列中删除后，
+   * 就不需要再在哈希表中删除
+   **********************/
   for (LRUHandle* e = lru_.next; e != &lru_; ) {
     LRUHandle* next = e->next;
     assert(e->refs == 1);  // Error if caller has an unreleased handle
@@ -200,16 +244,19 @@ void LRUCache::LRU_Remove(LRUHandle* e) {
 
 void LRUCache::LRU_Append(LRUHandle* e) {
   // Make "e" newest entry by inserting just before lru_
+  // lru前面的entry最新
   e->next = &lru_;
   e->prev = lru_.prev;
   e->prev->next = e;
   e->next->prev = e;
 }
 
+//LRUCache table中的entry是LRUHandle，返回的是通过reinterpre_cast转换的Cache::Handle
 Cache::Handle* LRUCache::Lookup(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Lookup(key, hash);
   if (e != NULL) {
+    // entry的引用加1，所以相对的要Realse返回的Handle
     e->refs++;
     LRU_Remove(e);
     LRU_Append(e);
@@ -240,11 +287,13 @@ Cache::Handle* LRUCache::Insert(
   usage_ += charge;
 
   LRUHandle* old = table_.Insert(e);
+  //与插入LRUHandle->key相同的LRUHandle要删除
   if (old != NULL) {
     LRU_Remove(old);
     Unref(old);
   }
 
+  //删除超过capacity的entry
   while (usage_ > capacity_ && lru_.next != &lru_) {
     LRUHandle* old = lru_.next;
     LRU_Remove(old);
@@ -255,6 +304,9 @@ Cache::Handle* LRUCache::Insert(
   return reinterpret_cast<Cache::Handle*>(e);
 }
 
+/*****************************
+ * 删除一个LRUHandle时，同时在哈希表和LRU队列中删除
+ ****************************/
 void LRUCache::Erase(const Slice& key, uint32_t hash) {
   MutexLock l(&mutex_);
   LRUHandle* e = table_.Remove(key, hash);
@@ -267,6 +319,9 @@ void LRUCache::Erase(const Slice& key, uint32_t hash) {
 static const int kNumShardBits = 4;
 static const int kNumShards = 1 << kNumShardBits;
 
+/********************************
+ * ShardedLRUCache继承Cache，包含16个LRUcache, 减少多线程中锁的争用
+ *******************************/
 class ShardedLRUCache : public Cache {
  private:
   LRUCache shard_[kNumShards];
@@ -277,6 +332,7 @@ class ShardedLRUCache : public Cache {
     return Hash(s.data(), s.size(), 0);
   }
 
+  // 取hash值的高4位决定使用哪个shard
   static uint32_t Shard(uint32_t hash) {
     return hash >> (32 - kNumShardBits);
   }
@@ -318,6 +374,7 @@ class ShardedLRUCache : public Cache {
 
 }  // end anonymous namespace
 
+//创建一个ShardedLRUCache
 Cache* NewLRUCache(size_t capacity) {
   return new ShardedLRUCache(capacity);
 }

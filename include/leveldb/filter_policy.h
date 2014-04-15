@@ -12,6 +12,10 @@
 //
 // Most people will want to use the builtin bloom filter support (see
 // NewBloomFilterPolicy() below).
+/*********************************
+ * filterPolicy根据一组keys得出，并存储到leveldb中，用于判断key是否在data block中，
+ * 避免一部分磁盘读取操作，系统内置bloom_filter过滤策略
+ ********************************/
 
 #ifndef STORAGE_LEVELDB_INCLUDE_FILTER_POLICY_H_
 #define STORAGE_LEVELDB_INCLUDE_FILTER_POLICY_H_
@@ -22,6 +26,11 @@ namespace leveldb {
 
 class Slice;
 
+/*********************************************
+ * ¹ýÂË²ßÂÔµÄ³éÏó£¬ÆäÖÐÒ»ÖÖÊµÏÖÊÇ bloomFilterpolicy
+ * ÆäÖÐCreateFilter´´½¨filter×Ö·û´®£¬KeyMatchÅÐ¶ÏÊÇ·ñ´æÔÚ
+ * ×¢Òâ´´½¨Íêfilterºó£ ²»ÄÜÍùfilterÖÐ×·¼Ókey
+ ********************************************/
 class FilterPolicy {
  public:
   virtual ~FilterPolicy();

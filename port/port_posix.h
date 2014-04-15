@@ -82,6 +82,10 @@ static const bool kLittleEndian = PLATFORM_IS_LITTLE_ENDIAN;
 
 class CondVar;
 
+/******************************
+ * pthread_mutex_t的封装类，构造Mutex时，初始化pthread_mutex_t,
+ * 析构时销毁pthread_mutex_t,不需要人为主动销毁pthread_mutex_t
+ * ***************************/
 class Mutex {
  public:
   Mutex();
@@ -100,6 +104,10 @@ class Mutex {
   void operator=(const Mutex&);
 };
 
+/********************************
+ * 信号量pthread_cond_t的封装函数，构造类时初始化，析构时销毁
+ * 将Mutex指针作为互斥量
+ * *****************************/
 class CondVar {
  public:
   explicit CondVar(Mutex* mu);
@@ -114,8 +122,17 @@ class CondVar {
 
 typedef pthread_once_t OnceType;
 #define LEVELDB_ONCE_INIT PTHREAD_ONCE_INIT
+/******************************
+ * 一次性初始化函数，OnceType 为初始化变量，initializer为具体的初始化函数，
+ * 内部封装pthread_once, 确保initializer函数只执行一次
+ * ***************************/
 extern void InitOnce(OnceType* once, void (*initializer)());
 
+/******************************
+ * Snappy压缩封装函数， Snappy是一种高效的压缩和解亚算法，但是压缩率
+ * 比较低，在leveldb中，数据的读写效率是非常重要的，故选择Snappy作为
+ * 压缩算法
+ * ***************************/
 inline bool Snappy_Compress(const char* input, size_t length,
                             ::std::string* output) {
 #ifdef SNAPPY
@@ -147,6 +164,10 @@ inline bool Snappy_Uncompress(const char* input, size_t length,
 #endif
 }
 
+/**********************************
+ * 是否采用Heap Profiler分析内存的分配和释放状况,
+ * 主要用于调试开发阶段
+ * *******************************/
 inline bool GetHeapProfile(void (*func)(void*, const char*, int), void* arg) {
   return false;
 }

@@ -128,6 +128,10 @@ const char* GetVarint32PtrFallback(const char* p,
   return NULL;
 }
 
+/************************************
+ * 调用GetVarint32Ptr从Slice中获取varint,
+ * 并从Slice中去除解析过的varint
+ ************************************/
 bool GetVarint32(Slice* input, uint32_t* value) {
   const char* p = input->data();
   const char* limit = p + input->size();
@@ -169,6 +173,9 @@ bool GetVarint64(Slice* input, uint64_t* value) {
   }
 }
 
+/******************************
+ * 通过GetVarint32Ptr先获得length（value length）值
+ * 根据value length从slice中取出value，并从slice中删除length和value*/
 const char* GetLengthPrefixedSlice(const char* p, const char* limit,
                                    Slice* result) {
   uint32_t len;
@@ -179,6 +186,7 @@ const char* GetLengthPrefixedSlice(const char* p, const char* limit,
   return p + len;
 }
 
+/* input is changed, input = input + lenght(len) + len */
 bool GetLengthPrefixedSlice(Slice* input, Slice* result) {
   uint32_t len;
   if (GetVarint32(input, &len) &&

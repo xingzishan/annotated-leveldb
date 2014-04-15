@@ -64,9 +64,11 @@ typedef uint64_t SequenceNumber;
 
 // We leave eight bits empty at the bottom so a type and sequence#
 // can be packed together into 64-bits.
+// 最后八位预留给valuetype
 static const SequenceNumber kMaxSequenceNumber =
     ((0x1ull << 56) - 1);
 
+// 解析后的InternalKey, 分解成三个成员
 struct ParsedInternalKey {
   Slice user_key;
   SequenceNumber sequence;
@@ -79,11 +81,13 @@ struct ParsedInternalKey {
 };
 
 // Return the length of the encoding of "key".
+// 编码一个ParedInternalKey所需的长度， sequence + type = 8B
 inline size_t InternalKeyEncodingLength(const ParsedInternalKey& key) {
   return key.user_key.size() + 8;
 }
 
 // Append the serialization of "key" to *result.
+// 将序列化后的key追加到result
 extern void AppendInternalKey(std::string* result,
                               const ParsedInternalKey& key);
 
@@ -91,6 +95,7 @@ extern void AppendInternalKey(std::string* result,
 // stores the parsed data in "*result", and returns true.
 //
 // On error, returns false, leaves "*result" in an undefined state.
+// 解析InternalKey为对应的ParedInternalKey
 extern bool ParseInternalKey(const Slice& internal_key,
                              ParsedInternalKey* result);
 
@@ -141,15 +146,18 @@ class InternalFilterPolicy : public FilterPolicy {
 // Modules in this directory should keep internal keys wrapped inside
 // the following class instead of plain strings so that we do not
 // incorrectly use string comparisons instead of an InternalKeyComparator.
+// sstable中存储的是InternalKey
 class InternalKey {
  private:
   std::string rep_;
  public:
   InternalKey() { }   // Leave rep_ as empty to indicate it is invalid
+  // 序列化ParsedInternalKey保存到rep_
   InternalKey(const Slice& user_key, SequenceNumber s, ValueType t) {
     AppendInternalKey(&rep_, ParsedInternalKey(user_key, s, t));
   }
 
+  // InternalKey的DecodeFrom和Encode是string和sluice之间的转化
   void DecodeFrom(const Slice& s) { rep_.assign(s.data(), s.size()); }
   Slice Encode() const {
     assert(!rep_.empty());
@@ -158,6 +166,7 @@ class InternalKey {
 
   Slice user_key() const { return ExtractUserKey(rep_); }
 
+  // ParsedInternalKey转化成InternalKey
   void SetFrom(const ParsedInternalKey& p) {
     rep_.clear();
     AppendInternalKey(&rep_, p);
@@ -170,6 +179,7 @@ class InternalKey {
 
 inline int InternalKeyComparator::Compare(
     const InternalKey& a, const InternalKey& b) const {
+  // a.Encode()返回Sluice, 调用Compare(Sluice& a, Sluice& b)进行比较
   return Compare(a.Encode(), b.Encode());
 }
 
@@ -194,6 +204,7 @@ class LookupKey {
 
   ~LookupKey();
 
+  // LookupKey由klength,userkey,tag组成, 兼容memtable和InternalKey格式
   // Return a key suitable for lookup in a MemTable.
   Slice memtable_key() const { return Slice(start_, end_ - start_); }
 
@@ -205,7 +216,7 @@ class LookupKey {
 
  private:
   // We construct a char array of the form:
-  //    klength  varint32               <-- start_
+  //    klength  varint32               <-- start_    kelngth为user_key.size()+8
   //    userkey  char[klength]          <-- kstart_
   //    tag      uint64
   //                                    <-- end_
@@ -214,6 +225,7 @@ class LookupKey {
   const char* start_;
   const char* kstart_;
   const char* end_;
+  // 减少内存碎片
   char space_[200];      // Avoid allocation for short keys
 
   // No copying allowed

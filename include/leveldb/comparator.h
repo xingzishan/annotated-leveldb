@@ -43,6 +43,11 @@ class Comparator {
   // If *start < limit, changes *start to a short string in [start,limit).
   // Simple comparator implementations may return with *start unchanged,
   // i.e., an implementation of this method that does nothing is correct.
+  /**********************************
+   * 找出比start大，比limit小的ShortestSeparator,比如
+   * start="abccc",limit="abs"     result="abd"
+   * start="ab",limit="sf"         result="ac"
+   *********************************/
   virtual void FindShortestSeparator(
       std::string* start,
       const Slice& limit) const = 0;
@@ -56,6 +61,9 @@ class Comparator {
 // Return a builtin comparator that uses lexicographic byte-wise
 // ordering.  The result remains the property of this module and
 // must not be deleted.
+/*************************************
+ * 内置一个以字典序作为比较的比较器
+ * ***********************************/
 extern const Comparator* BytewiseComparator();
 
 }  // namespace leveldb

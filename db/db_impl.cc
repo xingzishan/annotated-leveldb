@@ -284,6 +284,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     return s;
   }
 
+  // 不存在就新建db
   if (!env_->FileExists(CurrentFileName(dbname_))) {
     if (options_.create_if_missing) {
       s = NewDB();
@@ -323,6 +324,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     versions_->AddLiveFiles(&expected);
     uint64_t number;
     FileType type;
+    // 找出需要恢复db的日志文件
     std::vector<uint64_t> logs;
     for (size_t i = 0; i < filenames.size(); i++) {
       if (ParseFileName(filenames[i], &number, &type)) {
@@ -468,6 +470,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   Status s;
   {
     mutex_.Unlock();
+    // memtable 写入 sstable，新生成的sstable信息保存在meta中
     s = BuildTable(dbname_, env_, options_, table_cache_, iter, &meta);
     mutex_.Lock();
   }
@@ -482,6 +485,8 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
 
   // Note that if file_size is zero, the file has been deleted and
   // should not be added to the manifest.
+  //
+  // 新生的sstable信息加入到VersionEdit, 之后要添加到Version中
   int level = 0;
   if (s.ok() && meta.file_size > 0) {
     const Slice min_user_key = meta.smallest.user_key();
@@ -500,6 +505,7 @@ Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
   return s;
 }
 
+// 合并memtable，将imm写入sstable，将sstable信息更新到version
 void DBImpl::CompactMemTable() {
   mutex_.AssertHeld();
   assert(imm_ != NULL);
@@ -625,6 +631,7 @@ void DBImpl::MaybeScheduleCompaction() {
     // No work to be done
   } else {
     bg_compaction_scheduled_ = true;
+    //compact 都是在后台运行
     env_->Schedule(&DBImpl::BGWork, this);
   }
 }
@@ -754,6 +761,7 @@ void DBImpl::CleanupCompaction(CompactionState* compact) {
   delete compact;
 }
 
+// 新建sstable用于存放合并后的数据，并将该文件绑定到TableBuilder
 Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
   assert(compact != NULL);
   assert(compact->builder == NULL);
@@ -841,14 +849,17 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
       static_cast<long long>(compact->total_bytes));
 
   // Add compaction outputs
+  // 参与合并的文件加入到VersionEdit中的deleted_files
   compact->compaction->AddInputDeletions(compact->compaction->edit());
   const int level = compact->compaction->level();
+  // 合并后的文件加入到VersionEdit中
   for (size_t i = 0; i < compact->outputs.size(); i++) {
     const CompactionState::Output& out = compact->outputs[i];
     compact->compaction->edit()->AddFile(
         level + 1,
         out.number, out.file_size, out.smallest, out.largest);
   }
+  // VersionEdit更新到当前Version中
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
 
@@ -874,6 +885,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   // Release mutex while we're actually doing the compaction work
   mutex_.Unlock();
 
+  // 参与compaction的所有文件的iterator merge成一个iterator
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
   input->SeekToFirst();
   Status status;

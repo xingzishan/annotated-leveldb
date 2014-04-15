@@ -6,6 +6,7 @@
 
 namespace leveldb {
 
+// leveldb/iterator.h 的部分实现(清理函数实现)
 Iterator::Iterator() {
   cleanup_.function = NULL;
   cleanup_.next = NULL;

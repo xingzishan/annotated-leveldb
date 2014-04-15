@@ -16,6 +16,10 @@ class WritableFile;
 
 namespace log {
 
+/*********************
+ * 日志按照block组织的，每个block32K，record可能会占用多个block，
+ * 也有可能多个record占用一个block，保证一个block可以正常读取即可
+ ********************/
 class Writer {
  public:
   // Create a writer that will append data to "*dest".
@@ -33,6 +37,7 @@ class Writer {
   // crc32c values for all supported record types.  These are
   // pre-computed to reduce the overhead of computing the crc of the
   // record type stored in the header.
+  // 对RecordType的每个enum进行crc32校验
   uint32_t type_crc_[kMaxRecordType + 1];
 
   Status EmitPhysicalRecord(RecordType type, const char* ptr, size_t length);

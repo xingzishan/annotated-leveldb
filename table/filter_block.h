@@ -26,6 +26,7 @@ class FilterPolicy;
 //
 // The sequence of calls to FilterBlockBuilder must match the regexp:
 //      (StartBlock AddKey*)* Finish
+// FilterBlockBuilder 用于生成一系列filter结果，并将其放到一个block中
 class FilterBlockBuilder {
  public:
   explicit FilterBlockBuilder(const FilterPolicy*);
@@ -38,11 +39,13 @@ class FilterBlockBuilder {
   void GenerateFilter();
 
   const FilterPolicy* policy_;
+  // 包含所有的key
   std::string keys_;              // Flattened key contents
+  // 表示keys中各个key所在的位置
   std::vector<size_t> start_;     // Starting index in keys_ of each key
   std::string result_;            // Filter data computed so far
   std::vector<Slice> tmp_keys_;   // policy_->CreateFilter() argument
-  std::vector<uint32_t> filter_offsets_;
+  std::vector<uint32_t> filter_offsets_; //记录每个filter在result中的偏移量
 
   // No copying allowed
   FilterBlockBuilder(const FilterBlockBuilder&);
@@ -52,14 +55,18 @@ class FilterBlockBuilder {
 class FilterBlockReader {
  public:
  // REQUIRES: "contents" and *policy must stay live while *this is live.
+ // contents 即为通过FilterBlockBuilder 生成的result字符串,包含num个filter offset
   FilterBlockReader(const FilterPolicy* policy, const Slice& contents);
   bool KeyMayMatch(uint64_t block_offset, const Slice& key);
 
  private:
   const FilterPolicy* policy_;
   const char* data_;    // Pointer to filter data (at block-start)
+  // contents中取出offset array以及之后的部分
   const char* offset_;  // Pointer to beginning of offset array (at block-end)
+  // contents中多少个entry
   size_t num_;          // Number of entries in offset array
+  // 编码参数，与FilterBlockBuilder中的编码参数相同
   size_t base_lg_;      // Encoding parameter (see kFilterBaseLg in .cc file)
 };
 

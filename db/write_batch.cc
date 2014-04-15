@@ -12,6 +12,11 @@
 // varstring :=
 //    len: varint32
 //    data: uint8[len]
+/***************************
+ * WriteBatch 将所有需要添加或者删除的数据都存储在rep_字符串中 格式为 sequence_number,count,entry 0 .... n
+ *    entry:
+ *      kTypeValue varstring(len + data) varstring(len+data)
+ **************************/
 
 #include "leveldb/write_batch.h"
 
@@ -39,6 +44,7 @@ void WriteBatch::Clear() {
   rep_.resize(kHeader);
 }
 
+// Iterate函数解析rep_中的各条记录，并用handler去处理
 Status WriteBatch::Iterate(Handler* handler) const {
   Slice input(rep_);
   if (input.size() < kHeader) {
@@ -79,6 +85,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
   }
 }
 
+// count长度为4B， 位于rep_的第9-12字节处
 int WriteBatchInternal::Count(const WriteBatch* b) {
   return DecodeFixed32(b->rep_.data() + 8);
 }
@@ -109,6 +116,7 @@ void WriteBatch::Delete(const Slice& key) {
 }
 
 namespace {
+// MemTableInserter具体的WriteBatch数据处理函数，将其写入到memtable中
 class MemTableInserter : public WriteBatch::Handler {
  public:
   SequenceNumber sequence_;
@@ -116,6 +124,7 @@ class MemTableInserter : public WriteBatch::Handler {
 
   virtual void Put(const Slice& key, const Slice& value) {
     mem_->Add(sequence_, kTypeValue, key, value);
+    // sequence自增1， WriteBatch所有record共用一个sequence,在实际处理时，sequence是独立的
     sequence_++;
   }
   virtual void Delete(const Slice& key) {
@@ -125,6 +134,7 @@ class MemTableInserter : public WriteBatch::Handler {
 };
 }  // namespace
 
+// 封装WriteBatch::iterate, 将WriteBatch中的数据写入memtatable
 Status WriteBatchInternal::InsertInto(const WriteBatch* b,
                                       MemTable* memtable) {
   MemTableInserter inserter;

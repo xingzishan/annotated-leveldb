@@ -17,6 +17,10 @@ class InternalKeyComparator;
 class Mutex;
 class MemTableIterator;
 
+/**************************
+ * memtable的数据结构为skiplist,memtable的操作都是在skiplist之上进行操作
+ * key value存储在skiplist时，合并成一个字符串key_length,key,seq,value_length,value存储的
+ *************************/
 class MemTable {
  public:
   // MemTables are reference counted.  The initial reference count
@@ -78,7 +82,9 @@ class MemTable {
 
   KeyComparator comparator_;
   int refs_;
+  // 分配空间通过arena
   Arena arena_;
+  // 组织数据使用skiplist
   Table table_;
 
   // No copying allowed

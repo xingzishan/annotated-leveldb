@@ -29,6 +29,7 @@ Status BlockHandle::DecodeFrom(Slice* input) {
   }
 }
 
+// 将metaindex_handle index_handle magic number依次编码到string
 void Footer::EncodeTo(std::string* dst) const {
 #ifndef NDEBUG
   const size_t original_size = dst->size();
@@ -51,6 +52,7 @@ Status Footer::DecodeFrom(Slice* input) {
     return Status::InvalidArgument("not an sstable (bad magic number)");
   }
 
+  // 重新设置metaindex_block_handle的offset_和size_
   Status result = metaindex_handle_.DecodeFrom(input);
   if (result.ok()) {
     result = index_handle_.DecodeFrom(input);
@@ -76,6 +78,7 @@ Status ReadBlock(RandomAccessFile* file,
   size_t n = static_cast<size_t>(handle.size());
   char* buf = new char[n + kBlockTrailerSize];
   Slice contents;
+  // 从RandomAccessFile中读取Block，包括type+crc tailer
   Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
   if (!s.ok()) {
     delete[] buf;
@@ -87,6 +90,7 @@ Status ReadBlock(RandomAccessFile* file,
   }
 
   // Check the crc of the type and the block contents
+  // 检查crc
   const char* data = contents.data();    // Pointer to where Read put the data
   if (options.verify_checksums) {
     const uint32_t crc = crc32c::Unmask(DecodeFixed32(data + n + 1));
@@ -98,6 +102,7 @@ Status ReadBlock(RandomAccessFile* file,
     }
   }
 
+  // 判断Block type
   switch (data[n]) {
     case kNoCompression:
       if (data != buf) {

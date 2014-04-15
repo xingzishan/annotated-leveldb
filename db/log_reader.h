@@ -50,6 +50,7 @@ class Reader {
   // "*scratch" as temporary storage.  The contents filled in *record
   // will only be valid until the next mutating operation on this
   // reader or the next mutation to *scratch.
+  // 读取一条记录，该记录可能跨了多个block
   bool ReadRecord(Slice* record, std::string* scratch);
 
   // Returns the physical offset of the last record returned by ReadRecord.
@@ -58,6 +59,7 @@ class Reader {
   uint64_t LastRecordOffset();
 
  private:
+  // 日志是顺序读取的，效率较高，所以用的是SequentialFile
   SequentialFile* const file_;
   Reporter* const reporter_;
   bool const checksum_;
@@ -90,6 +92,7 @@ class Reader {
   bool SkipToInitialBlock();
 
   // Return type, or one of the preceding special values
+  // 读取一个物理块32K
   unsigned int ReadPhysicalRecord(Slice* result);
 
   // Reports dropped bytes to the reporter.

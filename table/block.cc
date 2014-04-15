@@ -15,6 +15,16 @@
 
 namespace leveldb {
 
+/**************************
+ * block结构: entry(0~n) + num*restart + num_of_restart + trailer
+ * entry结构: shared_len + unshared_len + values_len + unshared_key + value
+ * trailer结构: type + crc
+ *
+ * entry即为一个kv pair, 为节省存储空间，key采用前缀压缩, 如果key与
+ * 上一个key有相同的前缀，则复用该前缀，该key只存储不相同的部分
+ * 同时为查找效率，每隔一些keys要重新进行前缀压缩(Options.block_restart_interval)
+ * 否则查找一个key都要从block的第一个key开始查找
+ **************************/
 inline uint32_t Block::NumRestarts() const {
   assert(size_ >= sizeof(uint32_t));
   return DecodeFixed32(data_ + size_ - sizeof(uint32_t));
@@ -50,6 +60,7 @@ Block::~Block() {
 //
 // If any errors are detected, returns NULL.  Otherwise, returns a
 // pointer to the key delta (just past the three decoded values).
+// entry组成：shared_length, non_shared_length, value_length, unshared_key_data, value_data
 static inline const char* DecodeEntry(const char* p, const char* limit,
                                       uint32_t* shared,
                                       uint32_t* non_shared,
@@ -75,12 +86,15 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
 
 class Block::Iter : public Iterator {
  private:
+  /* 用于迭代比较 */
   const Comparator* const comparator_;
   const char* const data_;      // underlying block contents
+  // restart offset 数组的起始offset, 初始化后是不变的
   uint32_t const restarts_;     // Offset of restart array (list of fixed32)
   uint32_t const num_restarts_; // Number of uint32_t entries in restart array
 
   // current_ is offset in data_ of current entry.  >= restarts_ if !Valid
+  // 当前entry的offset，小于restart_, 初始值为restart_
   uint32_t current_;
   uint32_t restart_index_;  // Index of restart block in which current_ falls
   std::string key_;
@@ -92,22 +106,27 @@ class Block::Iter : public Iterator {
   }
 
   // Return the offset in data_ just past the end of the current entry.
+  // 根据当前entry的value长度，获得下一个entry的offset
   inline uint32_t NextEntryOffset() const {
     return (value_.data() + value_.size()) - data_;
   }
 
+  // 获取第index个restart point的值, 也即offset
   uint32_t GetRestartPoint(uint32_t index) {
     assert(index < num_restarts_);
     return DecodeFixed32(data_ + restarts_ + index * sizeof(uint32_t));
   }
 
+  // 定位到第index个restart point
   void SeekToRestartPoint(uint32_t index) {
     key_.clear();
     restart_index_ = index;
+    // current_ 的值不变，在ParseNextKey函数中被修正，SeekToRestartPoint函数之后都会调用ParseNextKey函数
     // current_ will be fixed by ParseNextKey();
 
     // ParseNextKey() starts at the end of value_, so set value_ accordingly
     uint32_t offset = GetRestartPoint(index);
+    // 设置value的data_指针
     value_ = Slice(data_ + offset, 0);
   }
 
@@ -146,9 +165,10 @@ class Block::Iter : public Iterator {
 
     // Scan backwards to a restart point before current_
     const uint32_t original = current_;
+    // 找到current之前的最近的restart point
     while (GetRestartPoint(restart_index_) >= original) {
       if (restart_index_ == 0) {
-        // No more entries
+        // No more entries, 状态设置为invalid
         current_ = restarts_;
         restart_index_ = num_restarts_;
         return;
@@ -162,6 +182,7 @@ class Block::Iter : public Iterator {
     } while (ParseNextKey() && NextEntryOffset() < original);
   }
 
+  // 在Block中进行二分查找 target
   virtual void Seek(const Slice& target) {
     // Binary search in restart array to find the last restart point
     // with a key < target
@@ -204,11 +225,13 @@ class Block::Iter : public Iterator {
 
   virtual void SeekToFirst() {
     SeekToRestartPoint(0);
+    // 第一个restart point之后的entry就是first entry
     ParseNextKey();
   }
 
   virtual void SeekToLast() {
     SeekToRestartPoint(num_restarts_ - 1);
+    // 最后一个restart point所存的offset之后的最后一个entry为last entry
     while (ParseNextKey() && NextEntryOffset() < restarts_) {
       // Keep skipping
     }
@@ -224,6 +247,8 @@ class Block::Iter : public Iterator {
   }
 
   bool ParseNextKey() {
+    // 调用ParseNextKey之前一般调用SeekToRestartPoint, 那时value_已经指向第index个restart point
+    // 再根据value_得出current的值
     current_ = NextEntryOffset();
     const char* p = data_ + current_;
     const char* limit = data_ + restarts_;  // Restarts come right after data
@@ -241,9 +266,11 @@ class Block::Iter : public Iterator {
       CorruptionError();
       return false;
     } else {
+      // key_.resize(shared)就是该entry与上一个entry相同的前缀部分,append(non_shared),追加不同的部分就是当前entry的key
       key_.resize(shared);
       key_.append(p, non_shared);
       value_ = Slice(p + non_shared, value_length);
+      // 修改响应的restart_index值
       while (restart_index_ + 1 < num_restarts_ &&
              GetRestartPoint(restart_index_ + 1) < current_) {
         ++restart_index_;
@@ -253,6 +280,7 @@ class Block::Iter : public Iterator {
   }
 };
 
+// 根据block变量，返回ErrorIterator、EmptyIterator还是Block::Iter
 Iterator* Block::NewIterator(const Comparator* cmp) {
   if (size_ < sizeof(uint32_t)) {
     return NewErrorIterator(Status::Corruption("bad block contents"));

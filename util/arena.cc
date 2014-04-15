@@ -7,6 +7,9 @@
 
 namespace leveldb {
 
+/****************************
+* 默认的块空间为4K, 大于4K的按实际大小分配空间
+*****************************/
 static const int kBlockSize = 4096;
 
 Arena::Arena() {
@@ -25,6 +28,9 @@ char* Arena::AllocateFallback(size_t bytes) {
   if (bytes > kBlockSize / 4) {
     // Object is more than a quarter of our block size.  Allocate it separately
     // to avoid wasting too much space in leftover bytes.
+    /******************************
+     * 如果申请的空间大于1K，则直接新分配bytes空间, 而不是分配kBlockSize大小空间
+     ******************************/
     char* result = AllocateNewBlock(bytes);
     return result;
   }

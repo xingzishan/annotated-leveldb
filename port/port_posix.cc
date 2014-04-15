@@ -12,6 +12,9 @@
 namespace leveldb {
 namespace port {
 
+/********************************
+* 判断线程相关函数是否正常执行，失败则abort
+* *******************************/
 static void PthreadCall(const char* label, int result) {
   if (result != 0) {
     fprintf(stderr, "pthread %s: %s\n", label, strerror(result));

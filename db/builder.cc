@@ -33,6 +33,7 @@ Status BuildTable(const std::string& dbname,
     }
 
     TableBuilder* builder = new TableBuilder(options, file);
+    // 将memtable中的数据遍历存入sstable中
     meta->smallest.DecodeFrom(iter->key());
     for (; iter->Valid(); iter->Next()) {
       Slice key = iter->key();
@@ -53,6 +54,7 @@ Status BuildTable(const std::string& dbname,
     delete builder;
 
     // Finish and check for file errors
+    // sstable 写磁盘
     if (s.ok()) {
       s = file->Sync();
     }

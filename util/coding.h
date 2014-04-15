@@ -19,16 +19,29 @@
 namespace leveldb {
 
 // Standard Put... routines append to a string
+/************************
+* 将int类型追加到dst
+************************/
 extern void PutFixed32(std::string* dst, uint32_t value);
 extern void PutFixed64(std::string* dst, uint64_t value);
 extern void PutVarint32(std::string* dst, uint32_t value);
 extern void PutVarint64(std::string* dst, uint64_t value);
+/*************************
+ * 将value.size()和value.data()追加到dst
+ ************************/
 extern void PutLengthPrefixedSlice(std::string* dst, const Slice& value);
 
 // Standard Get... routines parse a value from the beginning of a Slice
 // and advance the slice past the parsed value.
+/**************************
+ * 从Slice中解析int类型到value，并在slice中去除解析过的value
+ *************************/
 extern bool GetVarint32(Slice* input, uint32_t* value);
 extern bool GetVarint64(Slice* input, uint64_t* value);
+/***************************
+ * 从slice中解析以length作为前缀的value,value值保存到result，
+ * Slice中去除解析过的length和value
+ **************************/
 extern bool GetLengthPrefixedSlice(Slice* input, Slice* result);
 
 // Pointer-based variants of GetVarint...  These either store a value

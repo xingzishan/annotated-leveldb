@@ -22,6 +22,11 @@
 
 namespace leveldb {
 
+/********************************
+* Slice是对char*和size的封装，类似std::string, 可以
+* 与String类型互换, Slice是leveldb最基本的数据类型,
+* 非多线程安全类
+********************************/
 class Slice {
  public:
   // Create an empty slice.
@@ -56,6 +61,9 @@ class Slice {
   void clear() { data_ = ""; size_ = 0; }
 
   // Drop the first "n" bytes from this slice.
+  /**************************
+   * 删除Slice的前n个字节
+   **************************/
   void remove_prefix(size_t n) {
     assert(n <= size());
     data_ += n;
@@ -69,6 +77,9 @@ class Slice {
   //   <  0 iff "*this" <  "b",
   //   == 0 iff "*this" == "b",
   //   >  0 iff "*this" >  "b"
+  /*************************
+   * 用Memcmp字典序比较两个Sluice的大小
+   *************************/
   int compare(const Slice& b) const;
 
   // Return true iff "x" is a prefix of "*this"

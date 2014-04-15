@@ -14,9 +14,15 @@ static uint32_t BloomHash(const Slice& key) {
   return Hash(key.data(), key.size(), 0xbc9f1d34);
 }
 
+/************************************
+ * Bloom Filter是由Bloom在1970年提出的一种多哈希函数映射的快速查找算法,
+ * 主要应用在快速判断某个元素是否属于集合,具有很好的空间和时间效率，有一定的
+ * 错误率会将不属于这个集合的元素判断为属于这个集合(false positive)
+ ***********************************/
 class BloomFilterPolicy : public FilterPolicy {
  private:
   size_t bits_per_key_;
+  // k_ 表示需要经过k_次哈希
   size_t k_;
 
  public:
@@ -32,6 +38,10 @@ class BloomFilterPolicy : public FilterPolicy {
     return "leveldb.BuiltinBloomFilter";
   }
 
+  /********************************
+   * 对n个key中的每个key进行k_次哈希，将哈希值写入dst
+   * dst就可以用与判断某个key是否属于该集合
+   *******************************/
   virtual void CreateFilter(const Slice* keys, int n, std::string* dst) const {
     // Compute bloom filter size (in both bits and bytes)
     size_t bits = n * bits_per_key_;
@@ -60,6 +70,9 @@ class BloomFilterPolicy : public FilterPolicy {
     }
   }
 
+  /*******************************
+   * 参数bloom_filter即为CreateFilter得出的dst
+   *******************************/
   virtual bool KeyMayMatch(const Slice& key, const Slice& bloom_filter) const {
     const size_t len = bloom_filter.size();
     if (len < 2) return false;

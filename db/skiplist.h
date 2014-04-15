@@ -35,6 +35,7 @@ namespace leveldb {
 class Arena;
 
 template<typename Key, class Comparator>
+// memtable的数据结构为skiplist，只有insert,contains函数，没有delete
 class SkipList {
  private:
   struct Node;
@@ -47,12 +48,14 @@ class SkipList {
 
   // Insert key into the list.
   // REQUIRES: nothing that compares equal to key is currently in the list.
+  // 只插入key
   void Insert(const Key& key);
 
   // Returns true iff an entry that compares equal to key is in the list.
   bool Contains(const Key& key) const;
 
   // Iteration over the contents of a skip list
+  // Skiplist的Iter类，没有value函数
   class Iterator {
    public:
     // Initialize an iterator over the specified list.
@@ -176,6 +179,7 @@ struct SkipList<Key,Comparator>::Node {
   port::AtomicPointer next_[1];
 };
 
+// Node空间是通过arena分配的
 template<typename Key, class Comparator>
 typename SkipList<Key,Comparator>::Node*
 SkipList<Key,Comparator>::NewNode(const Key& key, int height) {
@@ -255,6 +259,8 @@ bool SkipList<Key,Comparator>::KeyIsAfterNode(const Key& key, Node* n) const {
   return (n != NULL) && (compare_(n->key, key) < 0);
 }
 
+// 当level=0 以及KeyIsAfterNode 都为真时，才是要找到的结点
+// skiplist相当于二叉树，level!=0, 得到的结点一般并非最小的比key大的结点
 template<typename Key, class Comparator>
 typename SkipList<Key,Comparator>::Node* SkipList<Key,Comparator>::FindGreaterOrEqual(const Key& key, Node** prev)
     const {
@@ -301,6 +307,7 @@ SkipList<Key,Comparator>::FindLessThan(const Key& key) const {
 template<typename Key, class Comparator>
 typename SkipList<Key,Comparator>::Node* SkipList<Key,Comparator>::FindLast()
     const {
+  // 从head_[max_height-1]开始查起
   Node* x = head_;
   int level = GetMaxHeight() - 1;
   while (true) {
@@ -325,6 +332,7 @@ SkipList<Key,Comparator>::SkipList(Comparator cmp, Arena* arena)
       head_(NewNode(0 /* any key will do */, kMaxHeight)),
       max_height_(reinterpret_cast<void*>(1)),
       rnd_(0xdeadbeef) {
+  // 初始化head_ next指针为空
   for (int i = 0; i < kMaxHeight; i++) {
     head_->SetNext(i, NULL);
   }
@@ -341,6 +349,7 @@ void SkipList<Key,Comparator>::Insert(const Key& key) {
   assert(x == NULL || !Equal(key, x->key));
 
   int height = RandomHeight();
+  // max_height 是变化的，如果height>max_height，该height还没有元素，prev应设置为head_
   if (height > GetMaxHeight()) {
     for (int i = GetMaxHeight(); i < height; i++) {
       prev[i] = head_;

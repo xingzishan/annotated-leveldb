@@ -24,21 +24,25 @@ static std::string MakeFileName(const std::string& name, uint64_t number,
   return name + buf;
 }
 
+// leveldb的读写日志，用于恢复数据
 std::string LogFileName(const std::string& name, uint64_t number) {
   assert(number > 0);
   return MakeFileName(name, number, "log");
 }
 
+// TableFileName的后缀时ldb
 std::string TableFileName(const std::string& name, uint64_t number) {
   assert(number > 0);
   return MakeFileName(name, number, "ldb");
 }
 
+// SSTTableFileName的后缀时sst
 std::string SSTTableFileName(const std::string& name, uint64_t number) {
   assert(number > 0);
   return MakeFileName(name, number, "sst");
 }
 
+// CRRENT LOCK LOG LOG.old都是惟一的，不需要number参数
 std::string DescriptorFileName(const std::string& dbname, uint64_t number) {
   assert(number > 0);
   char buf[100];
@@ -60,6 +64,7 @@ std::string TempFileName(const std::string& dbname, uint64_t number) {
   return MakeFileName(dbname, number, "dbtmp");
 }
 
+// leveldb的基本信息日志
 std::string InfoLogFileName(const std::string& dbname) {
   return dbname + "/LOG";
 }
@@ -111,6 +116,7 @@ bool ParseFileName(const std::string& fname,
     Slice suffix = rest;
     if (suffix == Slice(".log")) {
       *type = kLogFile;
+    // 当前版本的sstable文件后缀为ldb， sst文件是兼容旧版本
     } else if (suffix == Slice(".sst") || suffix == Slice(".ldb")) {
       *type = kTableFile;
     } else if (suffix == Slice(".dbtmp")) {
@@ -126,6 +132,7 @@ bool ParseFileName(const std::string& fname,
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name
+  // 根据number构造MANIFEST文件名，取出dbname/前缀，写入临时文件，重命名
   std::string manifest = DescriptorFileName(dbname, descriptor_number);
   Slice contents = manifest;
   assert(contents.starts_with(dbname + "/"));

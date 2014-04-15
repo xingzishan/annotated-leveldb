@@ -126,6 +126,9 @@ class AtomicPointer {
 };
 
 // AtomicPointer based on <cstdatomic>
+/***********************************
+ * AtomicPointer为对原子操作的封装，避免多线程访问出现争用
+ * *********************************/
 #elif defined(LEVELDB_CSTDATOMIC_PRESENT)
 class AtomicPointer {
  private:

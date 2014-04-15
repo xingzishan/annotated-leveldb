@@ -14,6 +14,7 @@ namespace leveldb {
 
 struct Options;
 
+// BlockBuilder只有对block的写操作Add(),没有读取操作, 写Block不包括tailer
 class BlockBuilder {
  public:
   explicit BlockBuilder(const Options* options);

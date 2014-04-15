@@ -95,6 +95,7 @@ class PosixRandomAccessFile: public RandomAccessFile {
 // Helper class to limit mmap file usage so that we do not end up
 // running out virtual memory or running into kernel performance
 // problems for very large databases.
+// MmapLimiter用于限制mmap file的数量
 class MmapLimiter {
  public:
   // Up to 1000 mmaps for 64-bit binaries; none for smaller pointer sizes.
@@ -142,6 +143,7 @@ class MmapLimiter {
 };
 
 // mmap() based random-access
+// 从mmap中读取数据
 class PosixMmapReadableFile: public RandomAccessFile {
  private:
   std::string filename_;
@@ -256,6 +258,8 @@ class PosixWritableFile : public WritableFile {
   }
 };
 
+
+// 通过fcntl对fd加锁或者解锁, 为实际加锁解锁函数
 static int LockOrUnlock(int fd, bool lock) {
   errno = 0;
   struct flock f;
@@ -267,6 +271,7 @@ static int LockOrUnlock(int fd, bool lock) {
   return fcntl(fd, F_SETLK, &f);
 }
 
+// 文件加锁记录， 包括fd和filename， 不是实际加锁的函数
 class PosixFileLock : public FileLock {
  public:
   int fd_;
@@ -276,6 +281,7 @@ class PosixFileLock : public FileLock {
 // Set of locked files.  We keep a separate set instead of just
 // relying on fcntrl(F_SETLK) since fcntl(F_SETLK) does not provide
 // any protection against multiple uses from the same process.
+// 所有加锁的文件记录到locked_files集合中, 从集合中删除和添加文件名通过Port::Mutex控制
 class PosixLockTable {
  private:
   port::Mutex mu_;
@@ -451,6 +457,7 @@ class PosixEnv : public Env {
 
   virtual void Schedule(void (*function)(void*), void* arg);
 
+  // 直接运行一个后台线程
   virtual void StartThread(void (*function)(void* arg), void* arg);
 
   virtual Status GetTestDirectory(std::string* result) {
@@ -504,6 +511,7 @@ class PosixEnv : public Env {
   }
 
   // BGThread() is the body of the background thread
+  // 后台进程
   void BGThread();
   static void* BGThreadWrapper(void* arg) {
     reinterpret_cast<PosixEnv*>(arg)->BGThread();
@@ -516,6 +524,7 @@ class PosixEnv : public Env {
   bool started_bgthread_;
 
   // Entry per Schedule() call
+  // 封装后台进程信息， 通过Schedule push到BGQueue, 通过BGThread取出后台线程运行
   struct BGItem { void* arg; void (*function)(void*); };
   typedef std::deque<BGItem> BGQueue;
   BGQueue queue_;
@@ -533,6 +542,7 @@ void PosixEnv::Schedule(void (*function)(void*), void* arg) {
   PthreadCall("lock", pthread_mutex_lock(&mu_));
 
   // Start background thread if necessary
+  // 没有其它后台线程执行，就调用BGThreadWrapper去取priority queue执行
   if (!started_bgthread_) {
     started_bgthread_ = true;
     PthreadCall(
@@ -547,6 +557,7 @@ void PosixEnv::Schedule(void (*function)(void*), void* arg) {
   }
 
   // Add to priority queue
+  // function和arg放入priority queue
   queue_.push_back(BGItem());
   queue_.back().function = function;
   queue_.back().arg = arg;
@@ -599,6 +610,7 @@ static pthread_once_t once = PTHREAD_ONCE_INIT;
 static Env* default_env;
 static void InitDefaultEnv() { default_env = new PosixEnv; }
 
+// PosixEnv作为DefaultEnv， 只需要初始化一次
 Env* Env::Default() {
   pthread_once(&once, InitDefaultEnv);
   return default_env;

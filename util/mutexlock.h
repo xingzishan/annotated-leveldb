@@ -19,6 +19,7 @@ namespace leveldb {
 //     MutexLock l(&mu_);       // mu_ is an instance variable
 //     ... some complex code, possibly with multiple return paths ...
 //   }
+// 封装Mutex， 初始化时加锁，析构时解锁
 
 class SCOPED_LOCKABLE MutexLock {
  public:

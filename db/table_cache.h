@@ -18,6 +18,11 @@ namespace leveldb {
 
 class Env;
 
+/**********************
+ * 已经打开的sstable文件，将Table和file指针存入cache，
+ * 下次直接从cache中查找，无需再读硬盘打开sstable,
+ * cache的key为sstable file number，value为TableAndFile
+ **********************/
 class TableCache {
  public:
   TableCache(const std::string& dbname, const Options* options, int entries);
@@ -37,6 +42,7 @@ class TableCache {
 
   // If a seek to internal key "k" in specified file finds an entry,
   // call (*handle_result)(arg, found_key, found_value).
+  // 在Version::Get中调用, 调用Table::InternalGet查找key对应value
   Status Get(const ReadOptions& options,
              uint64_t file_number,
              uint64_t file_size,
@@ -45,6 +51,7 @@ class TableCache {
              void (*handle_result)(void*, const Slice&, const Slice&));
 
   // Evict any entry for the specified file number
+  // 从cache中删除file number对应的entry
   void Evict(uint64_t file_number);
 
  private:

@@ -20,6 +20,10 @@
 
 namespace leveldb {
 
+/**************************
+* Iterator为迭代器接口，leveldb中基本所有的数据结构都实现了Iterator，所以Iterator
+* 是读取leveldb数据非常重要的一个类, 该类是非多线程安全的，访问非const函数时，要加同步锁
+***************************/
 class Iterator {
  public:
   Iterator();
@@ -72,6 +76,9 @@ class Iterator {
   //
   // Note that unlike all of the preceding methods, this method is
   // not abstract and therefore clients should not override it.
+  /*************************************
+   * 注册Iterator的清理函数，当Iterator销毁时，调用清理函数，释放资源
+   ************************************/
   typedef void (*CleanupFunction)(void* arg1, void* arg2);
   void RegisterCleanup(CleanupFunction function, void* arg1, void* arg2);
 

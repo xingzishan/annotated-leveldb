@@ -28,6 +28,10 @@ namespace leveldb {
 
 class Slice;
 
+/*************************
+ * 批量写操作的封装类，操作按顺序执行, 只包含写相关操作，
+ * 需要更新的数据放在string变量中，非多线程安全类
+ *************************/
 class WriteBatch {
  public:
   WriteBatch();
@@ -43,12 +47,14 @@ class WriteBatch {
   void Clear();
 
   // Support for iterating over the contents of a batch.
+  // Handler处理rep_,写入到memtable
   class Handler {
    public:
     virtual ~Handler();
     virtual void Put(const Slice& key, const Slice& value) = 0;
     virtual void Delete(const Slice& key) = 0;
   };
+  // 解析rep_中的记录
   Status Iterate(Handler* handler) const;
 
  private:

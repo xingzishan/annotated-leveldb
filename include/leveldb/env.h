@@ -9,6 +9,10 @@
 //
 // All Env implementations are safe for concurrent access from
 // multiple threads without any external synchronization.
+/************************************
+ * Env封装了leveldb访问操作系统相关的功能，比如对文件的读写等
+ * 所有Env实现都是多线程访问安全的
+ * **********************************/
 
 #ifndef STORAGE_LEVELDB_INCLUDE_ENV_H_
 #define STORAGE_LEVELDB_INCLUDE_ENV_H_
@@ -226,6 +230,7 @@ class WritableFile {
 };
 
 // An interface for writing log messages.
+// 实现在util/posix_logger.h
 class Logger {
  public:
   Logger() { }

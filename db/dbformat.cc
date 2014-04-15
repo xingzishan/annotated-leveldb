@@ -9,6 +9,7 @@
 
 namespace leveldb {
 
+// sequence_number 与 valuetype 打包成一个u64int_t
 static uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(t <= kValueTypeForSeek);
@@ -52,10 +53,12 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   //    increasing user key (according to user-supplied comparator)
   //    decreasing sequence number
   //    decreasing type (though sequence# should be enough to disambiguate)
+  // 先比较user_key, 再比较sequence number
   int r = user_comparator_->Compare(ExtractUserKey(akey), ExtractUserKey(bkey));
   if (r == 0) {
     const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
     const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
+    // Sequence number大的排在前面
     if (anum > bnum) {
       r = -1;
     } else if (anum < bnum) {
@@ -65,6 +68,7 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   return r;
 }
 
+// InternalKey的比较和过滤要写抽取user_key
 void InternalKeyComparator::FindShortestSeparator(
       std::string* start,
       const Slice& limit) const {
@@ -77,6 +81,7 @@ void InternalKeyComparator::FindShortestSeparator(
       user_comparator_->Compare(user_start, tmp) < 0) {
     // User key has become shorter physically, but larger logically.
     // Tack on the earliest possible number to the shortened user key.
+    // 用KMaxSequenceNumber填充新的separtor
     PutFixed64(&tmp, PackSequenceAndType(kMaxSequenceNumber,kValueTypeForSeek));
     assert(this->Compare(*start, tmp) < 0);
     assert(this->Compare(tmp, limit) < 0);
@@ -122,6 +127,7 @@ LookupKey::LookupKey(const Slice& user_key, SequenceNumber s) {
   size_t usize = user_key.size();
   size_t needed = usize + 13;  // A conservative estimate
   char* dst;
+  // 所需空间小于space，放在栈中，放在放在堆上(new)
   if (needed <= sizeof(space_)) {
     dst = space_;
   } else {
