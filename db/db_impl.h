@@ -40,6 +40,7 @@ class DBImpl : public DB {
   virtual void ReleaseSnapshot(const Snapshot* snapshot);
   virtual bool GetProperty(const Slice& property, std::string* value);
   virtual void GetApproximateSizes(const Range* range, int n, uint64_t* sizes);
+  // 用户调用, leveldb不会主动调用
   virtual void CompactRange(const Slice* begin, const Slice* end);
 
   // Extra methods (for testing) that are not in the public DB interface
@@ -135,6 +136,7 @@ class DBImpl : public DB {
 
   // State below is protected by mutex_
   port::Mutex mutex_;
+  // 标示db是否删除
   port::AtomicPointer shutting_down_;
   port::CondVar bg_cv_;          // Signalled when background work finishes
   MemTable* mem_;

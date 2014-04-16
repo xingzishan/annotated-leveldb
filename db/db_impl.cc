@@ -87,6 +87,8 @@ static void ClipToRange(T* ptr, V minvalue, V maxvalue) {
   if (static_cast<V>(*ptr) > maxvalue) *ptr = maxvalue;
   if (static_cast<V>(*ptr) < minvalue) *ptr = minvalue;
 }
+
+// 审查option，使option参数在一个合理的范围内
 Options SanitizeOptions(const std::string& dbname,
                         const InternalKeyComparator* icmp,
                         const InternalFilterPolicy* ipolicy,
@@ -139,6 +141,7 @@ DBImpl::DBImpl(const Options& raw_options, const std::string& dbname)
 
   // Reserve ten files or so for other uses and give the rest to TableCache.
   const int table_cache_size = options_.max_open_files - kNumNonTableCacheFiles;
+  // max_open_files-10给table_cache使用，打开sstable通过table_cach
   table_cache_ = new TableCache(dbname_, &options_, table_cache_size);
 
   versions_ = new VersionSet(dbname_, &options_, table_cache_,
@@ -174,6 +177,7 @@ DBImpl::~DBImpl() {
   }
 }
 
+// 创建一个新的空db
 Status DBImpl::NewDB() {
   VersionEdit new_db;
   new_db.SetComparatorName(user_comparator()->Name());
@@ -188,6 +192,7 @@ Status DBImpl::NewDB() {
     return s;
   }
   {
+    // 初始数据库信息写入manifest
     log::Writer log(file);
     std::string record;
     new_db.EncodeTo(&record);
@@ -260,6 +265,7 @@ void DBImpl::DeleteObsoleteFiles() {
 
       if (!keep) {
         if (type == kTableFile) {
+          // 通过table cache删除，同时从cache中删除
           table_cache_->Evict(number);
         }
         Log(options_.info_log, "Delete type=%d #%lld\n",
@@ -271,6 +277,11 @@ void DBImpl::DeleteObsoleteFiles() {
   }
 }
 
+/**********************
+ * 从manifest和log中恢复当前数据库
+ * 从log中恢复数据时可能compact出新的sstable，
+ * 这种合并变化添加到edit中
+ *********************/
 Status DBImpl::Recover(VersionEdit* edit) {
   mutex_.AssertHeld();
 
@@ -302,6 +313,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     }
   }
 
+  // 恢复VersionSet中的current_
   s = versions_->Recover();
   if (s.ok()) {
     SequenceNumber max_sequence(0);
@@ -324,7 +336,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
     versions_->AddLiveFiles(&expected);
     uint64_t number;
     FileType type;
-    // 找出需要恢复db的日志文件
+    // 找出恢复db的日志文件
     std::vector<uint64_t> logs;
     for (size_t i = 0; i < filenames.size(); i++) {
       if (ParseFileName(filenames[i], &number, &type)) {
@@ -333,6 +345,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
           logs.push_back(number);
       }
     }
+    // 判断是否有sstable缺失
     if (!expected.empty()) {
       char buf[50];
       snprintf(buf, sizeof(buf), "%d missing files; e.g.",
@@ -361,6 +374,7 @@ Status DBImpl::Recover(VersionEdit* edit) {
   return s;
 }
 
+// 从数据log中恢复丢失的数据
 Status DBImpl::RecoverLogFile(uint64_t log_number,
                               VersionEdit* edit,
                               SequenceNumber* max_sequence) {
@@ -433,6 +447,10 @@ Status DBImpl::RecoverLogFile(uint64_t log_number,
       *max_sequence = last_seq;
     }
 
+    /**************************
+     * memtable达到大小限制，就写入到level-0层的sstable
+     * 在数据恢复阶段，直接从memtable写入到sstable中
+     **************************/
     if (mem->ApproximateMemoryUsage() > options_.write_buffer_size) {
       status = WriteLevel0Table(mem, edit, NULL);
       if (!status.ok()) {
@@ -456,6 +474,7 @@ Status DBImpl::RecoverLogFile(uint64_t log_number,
   return status;
 }
 
+// compact出的sstable写入到edit中
 Status DBImpl::WriteLevel0Table(MemTable* mem, VersionEdit* edit,
                                 Version* base) {
   mutex_.AssertHeld();
@@ -551,6 +570,7 @@ void DBImpl::CompactRange(const Slice* begin, const Slice* end) {
     }
   }
   TEST_CompactMemTable(); // TODO(sanjay): Skip if memtable does not overlap
+  // 重叠的每层都进行compact
   for (int level = 0; level < max_level_with_files; level++) {
     TEST_CompactRange(level, begin, end);
   }
@@ -562,6 +582,7 @@ void DBImpl::TEST_CompactRange(int level, const Slice* begin,const Slice* end) {
 
   InternalKey begin_storage, end_storage;
 
+  // 设置manual_compact, compact后台完成，执行时根据manual_compact获得compact信息
   ManualCompaction manual;
   manual.level = level;
   manual.done = false;
@@ -593,6 +614,7 @@ void DBImpl::TEST_CompactRange(int level, const Slice* begin,const Slice* end) {
   }
 }
 
+// 等待immtable compact完成
 Status DBImpl::TEST_CompactMemTable() {
   // NULL batch means just wait for earlier writes to be done
   Status s = Write(WriteOptions(), NULL);
@@ -670,6 +692,7 @@ void DBImpl::BackgroundCompaction() {
   Compaction* c;
   bool is_manual = (manual_compaction_ != NULL);
   InternalKey manual_end;
+  // 先执行手动触发的compact操作
   if (is_manual) {
     ManualCompaction* m = manual_compaction_;
     c = versions_->CompactRange(m->level, m->begin, m->end);
@@ -734,6 +757,7 @@ void DBImpl::BackgroundCompaction() {
     if (!status.ok()) {
       m->done = true;
     }
+    // 只合并了部分range，重设manual_compaction_
     if (!m->done) {
       // We only compacted part of the requested range.  Update *m
       // to the range that is left to be compacted.
@@ -863,6 +887,7 @@ Status DBImpl::InstallCompactionResults(CompactionState* compact) {
   return versions_->LogAndApply(compact->compaction->edit(), &mutex_);
 }
 
+// 真正的compact函数
 Status DBImpl::DoCompactionWork(CompactionState* compact) {
   const uint64_t start_micros = env_->NowMicros();
   int64_t imm_micros = 0;  // Micros spent doing imm_ compactions
@@ -1044,6 +1069,7 @@ static void CleanupIteratorState(void* arg1, void* arg2) {
 }
 }  // namespace
 
+// 整个DB的iterator为mem iterator，imm iterator以及current_ iterator merge而成
 Iterator* DBImpl::NewInternalIterator(const ReadOptions& options,
                                       SequenceNumber* latest_snapshot,
                                       uint32_t* seed) {
@@ -1124,6 +1150,7 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Lock();
   }
 
+  // 每次查找sstable，判断是否需要compact
   if (have_stat_update && current->UpdateStats(stats)) {
     MaybeScheduleCompaction();
   }
@@ -1178,6 +1205,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   w.done = false;
 
   MutexLock l(&mutex_);
+  // 需要更新的数据放入到双端队列中
   writers_.push_back(&w);
   while (!w.done && &w != writers_.front()) {
     w.cv.Wait();
@@ -1454,6 +1482,7 @@ Status DB::Delete(const WriteOptions& opt, const Slice& key) {
 
 DB::~DB() { }
 
+// 打开db时，先恢复数据库, 并设置最新的数据日志文件
 Status DB::Open(const Options& options, const std::string& dbname,
                 DB** dbptr) {
   *dbptr = NULL;
@@ -1491,6 +1520,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
 Snapshot::~Snapshot() {
 }
 
+// 销毁db，删除dbname目录下的所有文件，以及删除dbname目录
 Status DestroyDB(const std::string& dbname, const Options& options) {
   Env* env = options.env;
   std::vector<std::string> filenames;
