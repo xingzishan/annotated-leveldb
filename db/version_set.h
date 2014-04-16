@@ -320,6 +320,7 @@ class VersionSet {
 };
 
 // A Compaction encapsulates information about a compaction.
+// compact信息封装类，执行compact在db_impl.cc中
 class Compaction {
  public:
   ~Compaction();
@@ -391,6 +392,7 @@ class Compaction {
   // is that we are positioned at one of the file ranges for each
   // higher level than the ones involved in this compaction (i.e. for
   // all L >= level_ + 2).
+  // 在IsBaseLevelForKey中用于在level+2以上各层查找是否存在user_key
   size_t level_ptrs_[config::kNumLevels];
 };
 

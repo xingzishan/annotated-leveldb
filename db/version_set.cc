@@ -20,7 +20,7 @@
 
 namespace leveldb {
 
-// 1M
+// 2M
 static const int kTargetFileSize = 2 * 1048576;
 
 // Maximum bytes of overlaps in grandparent (i.e., level+2) before we
@@ -93,6 +93,7 @@ Version::~Version() {
   }
 }
 
+// 二分查找key所在的FileMetaData
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files,
              const Slice& key) {
@@ -136,6 +137,7 @@ bool SomeFileOverlapsRange(
     const Slice* smallest_user_key,
     const Slice* largest_user_key) {
   const Comparator* ucmp = icmp.user_comparator();
+  // files中的key range如果相交，判断每一个file是否与keyoverlap
   if (!disjoint_sorted_files) {
     // Need to check against all files
     for (size_t i = 0; i < files.size(); i++) {
@@ -151,6 +153,7 @@ bool SomeFileOverlapsRange(
   }
 
   // Binary search over file list
+  // 不相交通过二分查找key可能所在的file
   uint32_t index = 0;
   if (smallest_user_key != NULL) {
     // Find the earliest possible internal key for smallest_user_key
@@ -171,10 +174,11 @@ bool SomeFileOverlapsRange(
 // is the largest key that occurs in the file, and value() is an
 // 16-byte value containing the file number and file size, both
 // encoded using EncodeFixed64.
-/* LevelFileNumIterator 是level级别的iterator，对某个level的sstable进行遍历，
+/***************************
+ * LevelFileNumIterator 是level级别的iterator，对某个level的sstable进行遍历，
  * key为sstable的largest key, value为file_number和file_size
  * 每个level中的sstable是有序的
- */
+ ****************************/
 class Version::LevelFileNumIterator : public Iterator {
  public:
   LevelFileNumIterator(const InternalKeyComparator& icmp,
@@ -240,8 +244,11 @@ static Iterator* GetFileIterator(void* arg,
   }
 }
 
-// LevelFileNumIterator遍历的是level中的某个sstable，value为file_num,file_size,
-// GetFileIterator可以根据LevelFileNumFiterator的value得到table的iterator
+/**********************************
+ * 该Iterator用于遍历某个level, 同table的index block, data block
+ * LevelFileNumIterator遍历的是level中的某个sstable，value为file_num,file_size,
+ * GetFileIterator可以根据LevelFileNumFiterator的value得到table的iterator
+ *********************************/
 Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
                                             int level) const {
   return NewTwoLevelIterator(
@@ -249,7 +256,10 @@ Iterator* Version::NewConcatenatingIterator(const ReadOptions& options,
       &GetFileIterator, vset_->table_cache_, options);
 }
 
-// 将所有files_的iterator添加到iterators
+/********************
+ * 将version中所有files_的iterator添加到iterators
+ * level-0的file分别添加到iters，其它level按层添加到iters
+ ********************/
 void Version::AddIterators(const ReadOptions& options,
                            std::vector<Iterator*>* iters) {
   // Merge all level zero files together since they may overlap
@@ -848,6 +858,10 @@ void VersionSet::AppendVersion(Version* v) {
   v->next_->prev_ = v;
 }
 
+/*********************
+ * 将VersionEdit更新到现在的current_ Version生成新的Version，作为新的current_
+ * 将edit更新操作记录到日志中，并设置CURRENT
+ ********************/
 Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   if (edit->has_log_number_) {
     assert(edit->log_number_ >= log_number_);
@@ -869,6 +883,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     builder.Apply(edit);
     builder.SaveTo(v);
   }
+  // 新生成的version计算其compact信息
   Finalize(v);
 
   // Initialize new descriptor log file if necessary by creating
@@ -884,6 +899,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
     s = env_->NewWritableFile(new_manifest_file, &descriptor_file_);
     if (s.ok()) {
       descriptor_log_ = new log::Writer(descriptor_file_);
+      // 当前状态写快照到日志中
       s = WriteSnapshot(descriptor_log_);
     }
   }
@@ -1094,7 +1110,7 @@ void VersionSet::Finalize(Version* v) {
   v->compaction_score_ = best_score;
 }
 
-// 将versionset的compact_pointer信息以及current_的files信息写入log
+// 写快照，将versionset的compact_pointer信息以及current_的files信息写入log
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
@@ -1198,7 +1214,10 @@ int64_t VersionSet::NumLevelBytes(int level) const {
   return TotalFileSize(current_->files_[level]);
 }
 
-// 获取某个sstable与level+1的sstable重合的大小，取最大值
+/********************
+ * 获取某个sstable与level+1的sstable重合的大小，取最大值
+ * 用于测试
+ *******************/
 int64_t VersionSet::MaxNextLevelOverlappingBytes() {
   int64_t result = 0;
   std::vector<FileMetaData*> overlaps;
@@ -1295,6 +1314,7 @@ Compaction* VersionSet::PickCompaction() {
 
   // We prefer compactions triggered by too much data in a level over
   // the compactions triggered by seeks.
+  // 两种因素会引起compact，大小限制以及查找次数限制
   const bool size_compaction = (current_->compaction_score_ >= 1);
   const bool seek_compaction = (current_->file_to_compact_ != NULL);
   if (size_compaction) {
@@ -1313,6 +1333,7 @@ Compaction* VersionSet::PickCompaction() {
         break;
       }
     }
+    // 如果没找到file，再从第一个file开始compact
     if (c->inputs_[0].empty()) {
       // Wrap-around to the beginning of the key space
       c->inputs_[0].push_back(current_->files_[level][0]);
@@ -1368,7 +1389,7 @@ void VersionSet::SetupOtherInputs(Compaction* c) {
     const int64_t expanded0_size = TotalFileSize(expanded0);
     // 尽可能的compact level层的files
     if (expanded0.size() > c->inputs_[0].size() &&
-        inputs1_size + expanded0_size < kExpandedCompactionByteSizeLimit) { //25M
+        inputs1_size + expanded0_size < kExpandedCompactionByteSizeLimit) { //50M
       InternalKey new_start, new_limit;
       GetRange(expanded0, &new_start, &new_limit);
       std::vector<FileMetaData*> expanded1;
@@ -1482,6 +1503,7 @@ bool Compaction::IsTrivialMove() const {
           TotalFileSize(grandparents_) <= kMaxGrandParentOverlapBytes);
 }
 
+// 合并后inputs_中的所有文件要删除，将其记录到VersionEdit中
 void Compaction::AddInputDeletions(VersionEdit* edit) {
   for (int which = 0; which < 2; which++) {
     for (size_t i = 0; i < inputs_[which].size(); i++) {
@@ -1513,9 +1535,11 @@ bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
   return true;
 }
 
-// 是否提前结束compaction, 计算与internal_key重叠的grandparents的files大小，如果重合的太多，
-// 那么即便copact，生成的level-n+1的sstable会和grandparents的sstable有太多重叠，再次compaction时
-// 会导致更多的sstable参与compact
+/*****************************
+ * 是否提前结束compaction, 计算与internal_key重叠的grandparents的files大小，如果重合的太多，
+ * 那么即便copact，生成的level-n+1的sstable会和grandparents的sstable有太多重叠，再次compaction时
+ * 会导致更多的sstable参与compact
+ ****************************/
 bool Compaction::ShouldStopBefore(const Slice& internal_key) {
   // Scan to find earliest grandparent file that contains key.
   const InternalKeyComparator* icmp = &input_version_->vset_->icmp_;
