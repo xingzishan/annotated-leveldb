@@ -1,5 +1,5 @@
 language: cpp
 
-script: ulimit -n 2048 && make check
+script: ulimit -n 2048
 
 compiler: gcc
