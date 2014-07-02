@@ -1,7 +1,5 @@
 language: cpp
 
-compiler:
-  - gcc
-    - clang
-os:
-  - linux
+script: ulimit -n 2048 && make check
+
+compiler: gcc
