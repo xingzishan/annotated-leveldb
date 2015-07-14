@@ -20,7 +20,7 @@ class WritableFile;
 
 /***********************************
  * Debug显示信息相关函数，数字转化成字符串，从字符串中读取数字等
- ***********************************
+ ***********************************/
 // Append a human-readable printout of "num" to *str
 extern void AppendNumberTo(std::string* str, uint64_t num);
 
