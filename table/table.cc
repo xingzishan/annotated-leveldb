@@ -162,6 +162,7 @@ static void DeleteCachedBlock(const Slice& key, void* value) {
 }
 
 // CacheBlock中value为block，cache release handle即为release block
+// cache->Release需要check ref，ref<=0才会真正释放
 static void ReleaseBlock(void* arg, void* h) {
   Cache* cache = reinterpret_cast<Cache*>(arg);
   Cache::Handle* handle = reinterpret_cast<Cache::Handle*>(h);

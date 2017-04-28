@@ -1207,7 +1207,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   MutexLock l(&mutex_);
   // 需要更新的数据放入到双端队列中
   writers_.push_back(&w);
-  while (!w.done && &w != writers_.front()) {
+  while (!w.done && &w != writers_.front()) { // 只有队首的线程可以写入数据
     w.cv.Wait();
   }
   if (w.done) {
